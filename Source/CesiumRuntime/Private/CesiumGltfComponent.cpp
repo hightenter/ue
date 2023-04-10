@@ -842,19 +842,33 @@ static void loadPrimitive(
     const std::vector<double>& max = positionAccessor.max;
     glm::dvec3 minPosition{std::numeric_limits<double>::max()};
     glm::dvec3 maxPosition{std::numeric_limits<double>::lowest()};
-    if (min.size() != 3 || max.size() != 3) {
-      for (int32_t i = 0; i < positionView.size(); ++i) {
-        minPosition.x = glm::min<double>(minPosition.x, positionView[i].X);
-        minPosition.y = glm::min<double>(minPosition.y, positionView[i].Y);
-        minPosition.z = glm::min<double>(minPosition.z, positionView[i].Z);
+    if (!options.sharedPositions) {
+      if (min.size() != 3 || max.size() != 3) {
+        for (int32_t i = 0; i < positionView.size(); ++i) {
+          minPosition.x = glm::min<double>(minPosition.x, positionView[i].X);
+          minPosition.y = glm::min<double>(minPosition.y, positionView[i].Y);
+          minPosition.z = glm::min<double>(minPosition.z, positionView[i].Z);
 
-        maxPosition.x = glm::max<double>(maxPosition.x, positionView[i].X);
-        maxPosition.y = glm::max<double>(maxPosition.y, positionView[i].Y);
-        maxPosition.z = glm::max<double>(maxPosition.z, positionView[i].Z);
+          maxPosition.x = glm::max<double>(maxPosition.x, positionView[i].X);
+          maxPosition.y = glm::max<double>(maxPosition.y, positionView[i].Y);
+          maxPosition.z = glm::max<double>(maxPosition.z, positionView[i].Z);
+        }
+      } else {
+        minPosition = glm::dvec3(min[0], min[1], min[2]);
+        maxPosition = glm::dvec3(max[0], max[1], max[2]);
       }
     } else {
-      minPosition = glm::dvec3(min[0], min[1], min[2]);
-      maxPosition = glm::dvec3(max[0], max[1], max[2]);
+      for (int32_t i = 0; i < indicesView.size(); ++i) {
+        const uint32 index = indicesView[i];
+
+        minPosition.x = glm::min<double>(minPosition.x, positionView[index].X);
+        minPosition.y = glm::min<double>(minPosition.y, positionView[index].Y);
+        minPosition.z = glm::min<double>(minPosition.z, positionView[index].Z);
+
+        maxPosition.x = glm::max<double>(maxPosition.x, positionView[index].X);
+        maxPosition.y = glm::max<double>(maxPosition.y, positionView[index].Y);
+        maxPosition.z = glm::max<double>(maxPosition.z, positionView[index].Z);
+      }
     }
 
 #if ENGINE_MAJOR_VERSION >= 5
@@ -1387,7 +1401,39 @@ static void loadMesh(
   result = LoadMeshResult();
   result->primitiveResults.reserve(mesh.primitives.size());
   for (const CesiumGltf::MeshPrimitive& primitive : mesh.primitives) {
-    CreatePrimitiveOptions primitiveOptions = {&options, &*result, &primitive};
+    bool sharedPositions = false;
+
+    if (primitive.indices >= 0) {
+      auto positionAccessorIt = primitive.attributes.find("POSITION");
+      if (positionAccessorIt == primitive.attributes.end()) {
+        // This primitive doesn't have a POSITION semantic, ignore it.
+        continue;
+      }
+
+      int positionAccessorID = positionAccessorIt->second;
+
+      for (const CesiumGltf::MeshPrimitive& otherPrimitive : mesh.primitives) {
+        if (&primitive == &otherPrimitive) {
+          continue;
+        }
+
+        auto otherPositionAccessorIt =
+            otherPrimitive.attributes.find("POSITION");
+        if (otherPositionAccessorIt == otherPrimitive.attributes.end()) {
+          // This primitive doesn't have a POSITION semantic, ignore it.
+          continue;
+        }
+
+        int otherPositionAccessorID = otherPositionAccessorIt->second;
+
+        if (positionAccessorID == otherPositionAccessorID) {
+          sharedPositions = true;
+          break;
+        }
+      }
+    }
+
+    CreatePrimitiveOptions primitiveOptions = {&options, &*result, &primitive, sharedPositions};
     auto& primitiveResult = result->primitiveResults.emplace_back();
     loadPrimitive(primitiveResult, transform, primitiveOptions);
 
@@ -1913,8 +1959,10 @@ static void loadPrimitiveGameThreadPart(
       RF_Transient | RF_DuplicateTransient | RF_TextExportTransient);
   pMesh->pModel = loadResult.pModel;
   pMesh->pMeshPrimitive = loadResult.pMeshPrimitive;
-  pMesh->boundingVolume = boundingVolume;
   pMesh->SetRenderCustomDepth(pGltf->CustomDepthParameters.RenderCustomDepth);
+  if (!createNavCollision) {
+    pMesh->boundingVolume = boundingVolume;
+  }
   pMesh->SetCustomDepthStencilWriteMask(
       pGltf->CustomDepthParameters.CustomDepthStencilWriteMask);
   pMesh->SetCustomDepthStencilValue(
