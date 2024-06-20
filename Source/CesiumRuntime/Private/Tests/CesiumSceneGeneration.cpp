@@ -10,7 +10,10 @@
 #include "LevelEditorViewport.h"
 
 #include "Cesium3DTileset.h"
+#include "CesiumAsync/ICacheDatabase.h"
 #include "CesiumGeoreference.h"
+#include "CesiumLoadTestCore.h"
+#include "CesiumRuntime.h"
 #include "CesiumSunSky.h"
 #include "GlobeAwareDefaultPawn.h"
 
