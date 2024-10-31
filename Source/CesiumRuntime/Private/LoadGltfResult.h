@@ -81,7 +81,7 @@ struct LoadPrimitiveResult {
         EncodedMetadata(std::move(other.EncodedMetadata)),
         Metadata_DEPRECATED(std::move(other.Metadata_DEPRECATED)),
         overlayTextureCoordinateIDToUVIndex(
-            std::move(overlayTextureCoordinateIDToUVIndex)),
+            std::move(other.overlayTextureCoordinateIDToUVIndex)),
         GltfToUnrealTexCoordMap(std::move(other.GltfToUnrealTexCoordMap)),
         TexCoordAccessorMap(std::move(other.TexCoordAccessorMap)),
         PositionAccessor(std::move(other.PositionAccessor)),
